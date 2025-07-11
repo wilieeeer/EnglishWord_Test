@@ -26,12 +26,16 @@
       button.primary{background:var(--primary);color:#fff;border:none;padding:.5rem 1rem;border-radius:.5rem;cursor:pointer}
       button.primary:hover{opacity:.9}
       #topbar{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:600px}
+      #control-buttons{display:flex;gap:0.5rem;align-items:center;}
     </style>
   </head>
   <body>
     <div id="topbar">
       <h1>英単語クイズ</h1>
-      <button id="restart" class="primary" style="display:none">リスタート</button>
+      <div id="control-buttons">
+        <button id="pause" class="primary" style="display:none">一時停止</button>
+        <button id="restart" class="primary" style="display:none">リスタート</button>
+      </div>
     </div>
 
     <div id="loader">
@@ -49,30 +53,33 @@
     </div>
 
     <script>
-      const loader=document.getElementById("loader"),quiz=document.getElementById("quiz"),fileInput=document.getElementById("file-input"),questionEl=document.getElementById("question"),optionsEl=document.getElementById("options"),statsEl=document.getElementById("stats"),wrongTable=document.getElementById("wrong-table"),wrongList=document.getElementById("wrong-list"),restartBtn=document.getElementById("restart"),timeDisplay=document.getElementById("time-left");
-      let originalData=[],words=[],current=null,correctCount=0,totalCount=0,wrongAnswers=[],timer=null,timeLeft=0;
-      const TIME_LIMIT=15; // 秒
+      const loader=document.getElementById("loader"),quiz=document.getElementById("quiz"),fileInput=document.getElementById("file-input"),questionEl=document.getElementById("question"),optionsEl=document.getElementById("options"),statsEl=document.getElementById("stats"),wrongTable=document.getElementById("wrong-table"),wrongList=document.getElementById("wrong-list"),restartBtn=document.getElementById("restart"),pauseBtn=document.getElementById("pause"),timeDisplay=document.getElementById("time-left");
+      let originalData=[],words=[],current=null,correctCount=0,totalCount=0,wrongAnswers=[],timer=null,timeLeft=0,paused=false;
+      const TIME_LIMIT=15;
 
       const shuffle=a=>a.sort(()=>Math.random()-.5);
       const renderStats=()=>{statsEl.textContent=`正答数 ${correctCount}/${totalCount} (正答率 ${totalCount?Math.round(correctCount/totalCount*100):0}%)`;wrongList.querySelector("summary").textContent=`誤答リスト (${wrongAnswers.length})`};
-      const renderWrongTable=()=>{wrongTable.innerHTML=wrongAnswers.map(w=>`<tr><td>${w.word}</td><td>${w.meaning}</td><td>${w.selected}</td></tr>`).join("")};
+      const renderWrongTable=()=>{wrongTable.innerHTML=wrongAnswers.map(w=>`<tr><td>${w.word}</td><td>${w.meaning}</td></tr>`).join("")};
+
       const startTimer=()=>{
         clearInterval(timer);
         timeLeft = TIME_LIMIT;
         timeDisplay.textContent = timeLeft;
         timer = setInterval(() => {
+          if (paused) return;
           timeLeft--;
           timeDisplay.textContent = timeLeft;
           if (timeLeft <= 0) {
             clearInterval(timer);
             totalCount++;
-            wrongAnswers.push({word: current.word, meaning: current.meaning, selected: "時間切れ"});
+            wrongAnswers.push({word: current.word, meaning: current.meaning});
             renderWrongTable();
             renderStats();
             nextQuestion();
           }
         }, 1000);
       };
+
       const nextQuestion=()=>{
         if(!words.length)return;
         current=words[Math.floor(Math.random()*words.length)];
@@ -88,7 +95,7 @@
             Array.from(optionsEl.children).forEach(b=>b.disabled=true);
             totalCount++;
             if(opt===current){correctCount++;btn.classList.add("correct")}
-            else{btn.classList.add("wrong");wrongAnswers.push({word:current.word,meaning:current.meaning,selected:opt.meaning});renderWrongTable()}
+            else{btn.classList.add("wrong");wrongAnswers.push({word:current.word,meaning:current.meaning});renderWrongTable()}
             renderStats();
             setTimeout(nextQuestion,800);
           };
@@ -96,17 +103,26 @@
         });
         startTimer();
       };
+
       const startQuiz=()=>{
         words=shuffle([...originalData]);
         correctCount=totalCount=0;wrongAnswers=[];
-        renderStats();renderWrongTable();loader.style.display="none";quiz.style.display="flex";restartBtn.style.display="inline-block";
+        renderStats();renderWrongTable();loader.style.display="none";quiz.style.display="flex";restartBtn.style.display="inline-block";pauseBtn.style.display="inline-block";
+        paused=false;
         nextQuestion();
       };
+
       const parseCSV=text=>{Papa.parse(text,{header:true,skipEmptyLines:true,complete:res=>{originalData=res.data.filter(r=>r.word&&r.meaning);startQuiz();},error:err=>alert("CSV 解析エラー:"+err.message)})};
+
       fetch('vocab_100.csv').then(r=>{if(!r.ok)throw new Error('no default csv');return r.text()}).then(parseCSV).catch(()=>{});
       fileInput.onchange=e=>{const f=e.target.files[0];if(f)f.text().then(parseCSV)};
       loader.ondragover=e=>{e.preventDefault();loader.style.background="#e5e7eb"};loader.ondragleave=()=>loader.style.background="";loader.ondrop=e=>{e.preventDefault();loader.style.background="";const f=e.dataTransfer.files[0];if(f)f.text().then(parseCSV)};
+
       restartBtn.onclick=()=>startQuiz();
+      pauseBtn.onclick=()=>{
+        paused = !paused;
+        pauseBtn.textContent = paused ? "再開" : "一時停止";
+      };
     </script>
   </body>
 </html>
